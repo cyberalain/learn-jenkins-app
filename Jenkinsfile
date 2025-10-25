@@ -24,7 +24,7 @@ pipeline {
         }
        */
 
-        stage('Tests')
+        stage('Tests') {
             parallel {
             stage('Unit tests') {
                 agent {
@@ -49,6 +49,7 @@ pipeline {
                         reuseNode true
                     }
                 }
+            }
                 
                 steps {
                     sh '''
