@@ -28,12 +28,12 @@ pipeline {
                     reuseNode true
                 }
             }
-            
+
         stage('Test') {
             steps {
                 sh'''
-                   test -f build/index.html
-                   npm
+                    test -f build/index.html
+                    npm test
                  '''
             }
         }
