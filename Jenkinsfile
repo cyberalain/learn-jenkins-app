@@ -6,7 +6,6 @@ pipeline {
             agent {
                 docker {
                     image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
-                    args '--user root -v /var/jenkins_home:/var/jenkins_home'
                     reuseNode true
                 }
             }
@@ -25,22 +24,14 @@ pipeline {
         stage('Test') {
             agent {
                 docker {
-                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
-                    args '--user root -v /var/jenkins_home:/var/jenkins_home'
+                    image 'node:1'
                     reuseNode true
                 }
             }
+
             steps {
                 sh '''
-                    # Check if build/index.html exists
-                    if [ -f "build/index.html" ]; then
-                        echo "✓ build/index.html exists"
-                    else
-                        echo "✗ build/index.html does not exist"
-                        exit 1
-                    fi
-                    
-                    # Run tests
+                    test -f build/index.html
                     npm test
                 '''
             }
