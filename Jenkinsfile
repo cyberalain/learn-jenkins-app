@@ -6,6 +6,7 @@ pipeline {
             agent {
                 docker {
                     image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+                    args '--user root -v /var/jenkins_home:/var/jenkins_home'
                     reuseNode true
                 }
             }
@@ -25,6 +26,7 @@ pipeline {
             agent {
                 docker {
                     image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+                    args '--user root -v /var/jenkins_home:/var/jenkins_home'
                     reuseNode true
                 }
             }
@@ -35,7 +37,7 @@ pipeline {
                         echo "✓ build/index.html exists"
                     else
                         echo "✗ build/index.html does not exist"
-                        exit 1  # Fail the stage if file doesn't exist
+                        exit 1
                     fi
                     
                     # Run tests
@@ -47,7 +49,7 @@ pipeline {
 
     post {
         always {
-            junit 'test-results/junint.xml'
+            junit 'test-results/junit.xml'
         }
     }
 }
