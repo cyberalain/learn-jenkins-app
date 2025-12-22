@@ -44,4 +44,10 @@ pipeline {
             }
         }
     }
+
+    post {
+        always {
+            junit 'test-results/junint.xml'
+        }
+    }
 }
