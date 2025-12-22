@@ -1,7 +1,8 @@
-pipeline {
+ pipeline {
     agent any
 
     stages {
+
         stage('Build') {
             agent {
                 docker {
@@ -11,11 +12,13 @@ pipeline {
             }
             steps {
                 sh '''
-                    ls -la
+                    echo "Build stage running in Playwright container"
                     node --version
                     npm --version
-                    npm ci
+
+                    npm install
                     npm run build
+
                     ls -la
                 '''
             }
@@ -24,13 +27,17 @@ pipeline {
         stage('Test') {
             agent {
                 docker {
-                    image 'node:1'
+                    image 'node:18-alpine'
                     reuseNode true
                 }
             }
-
             steps {
                 sh '''
+                    echo "Test stage running in Node container"
+
+                    node --version
+                    npm --version
+
                     test -f build/index.html
                     npm test
                 '''
@@ -40,7 +47,8 @@ pipeline {
 
     post {
         always {
-            junit 'test-results/junit.xml'
+            junit 'test-results/**/*.xml'
         }
     }
 }
+
