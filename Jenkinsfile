@@ -6,7 +6,7 @@ pipeline {
             agent {
                 docker {
                     // Use a simpler image
-                    image 'node:18-alpine'
+                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
                     // Try using the host's Docker socket
                     args '-v /var/run/docker.sock:/var/run/docker.sock'
                 }
@@ -36,7 +36,7 @@ pipeline {
         stage('E2E Tests') {
             agent {
                 docker {
-                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+                    image 'mcr.microsoft.com/playwright:v1.57.0-noble'
                 }
             }
             steps {
