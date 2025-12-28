@@ -1,19 +1,17 @@
 pipeline {
-    agent any
+    agent none
 
     stages {
         stage('Build and Test') {
             agent {
                 docker {
-                    // Use a simpler image
                     image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
-                    // Try using the host's Docker socket
                     args '-v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
             steps {
                 sh '''
-                    echo "Build stage"
+                    echo "🔧 Build and Test Stage"
                     node --version
                     npm --version
 
@@ -41,21 +39,26 @@ pipeline {
             }
             steps {
                 sh '''
-                    echo "E2E Testing Stage"
-                    
-                    # Copy build artifacts from workspace
-                    cp -r ../workspace@tmp/durable-*/build ./ || true
-                    
-                    # Start serve in background
+                    echo "🚀 E2E Testing Stage"
+
+                    # Ensure build folder exists
+                    if [ ! -d "build" ]; then
+                        echo "✗ build folder missing"
+                        exit 1
+                    fi
+
+                    # Install serve and start server
                     npm install -g serve
                     serve -s build -l 3000 &
                     SERVE_PID=$!
-                    
+
                     sleep 5
-                    
+
+                    # Run Playwright tests
                     npx playwright test
                     TEST_EXIT_CODE=$?
-                    
+
+                    # Stop server
                     kill $SERVE_PID 2>/dev/null || true
                     exit $TEST_EXIT_CODE
                 '''
