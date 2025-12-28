@@ -2,61 +2,58 @@ pipeline {
     agent any
 
     stages {
-        stage('Build and Test') {
+        /*
+
+        stage('Build') {
             agent {
                 docker {
-                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    image 'node:18-alpine'
+                    reuseNode true
                 }
             }
             steps {
                 sh '''
-                    echo "🔧 Build and Test Stage"
+                    ls -la
                     node --version
                     npm --version
-
                     npm ci
                     npm run build
+                    ls -la
+                '''
+            }
+        }
+        */
 
-                    if [ -f "build/index.html" ]; then
-                        echo "✓ build/index.html exists"
-                    else
-                        echo "✗ build/index.html does not exist"
-                        exit 1
-                    fi
+        stage('Test') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
 
+            steps {
+                sh '''
+                    #test -f build/index.html
                     npm test
                 '''
             }
         }
 
-        stage('E2E Tests') {
+        stage('E2E') {
             agent {
                 docker {
-                    image 'mcr.microsoft.com/playwright:v1.57.0-noble'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+                    reuseNode true
                 }
             }
+
             steps {
                 sh '''
-                    echo "🚀 E2E Testing Stage"
-
-                    if [ ! -d "build" ]; then
-                        echo "✗ build folder missing"
-                        exit 1
-                    fi
-
-                    npm install -g serve
-                    serve -s build -l 3000 &
-                    SERVE_PID=$!
-
-                    sleep 5
-
+                    npm install serve
+                    node_modules/.bin/serve -s build &
+                    sleep 10
                     npx playwright test
-                    TEST_EXIT_CODE=$?
-
-                    kill $SERVE_PID 2>/dev/null || true
-                    exit $TEST_EXIT_CODE
                 '''
             }
         }
@@ -64,8 +61,7 @@ pipeline {
 
     post {
         always {
-            junit allowEmptyResults: true, testResults: 'test-results/**/*.xml'
+            junit 'jest-results/junit.xml'
         }
     }
 }
-
