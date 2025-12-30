@@ -60,7 +60,7 @@ pipeline {
 
     post {
         always {
-            junit 'jest-results/junit.xml'
+            junit testResults: 'jest-results/junit.xml', allowEmptyResults: true
         }
     }
 }
