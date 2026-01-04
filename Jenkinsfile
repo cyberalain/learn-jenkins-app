@@ -1,7 +1,7 @@
 pipeline {
     agent any
 
-    eveironment {
+    environment {
         ENTLIFY_SITE_ID = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
     }
 
