@@ -75,7 +75,7 @@ pipeline {
             }
         }
 
-                stage('Deploy staging') {
+        stage('Deploy staging') {
             agent {
                 docker {
                     image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
@@ -91,7 +91,7 @@ pipeline {
                     node_modules/.bin/netlify deploy --dir=build
                 '''
             }
-        }
+        } //
 
         stage('Deploy prod') {
             agent {
