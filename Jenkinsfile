@@ -98,7 +98,7 @@ pipeline {
             steps {
                 script {
                     // Wait for manual approval before proceeding to production
-                   timeout(time: 7, unit: 'DAYS') {
+                   timeout(time: 15, unit: 'MINUTES') {
                         input(
                             id: 'approve-prod',
                             message: 'Do you wish to deploy to production?',
