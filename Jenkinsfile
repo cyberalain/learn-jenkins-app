@@ -98,17 +98,11 @@ pipeline {
             steps {
                 script {
                     // Wait for manual approval before proceeding to production
-                    timeout(time: 7, unit: 'DAYS') {
+                   timeout(time: 7, unit: 'DAYS') {
                         input(
                             id: 'approve-prod',
-                            message: 'Approve deployment to production?',
-                            parameters: [
-                                choice(
-                                    choices: ['Approve', 'Reject'],
-                                    description: 'Select whether to deploy to production',
-                                    name: 'DEPLOY_CHOICE'
-                                )
-                            ]
+                            message: 'Do you wish to deploy to production?',
+                            ok: 'Yes, I am sure!'
                         )
                     }
                 }
