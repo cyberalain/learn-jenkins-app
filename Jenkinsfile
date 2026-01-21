@@ -92,9 +92,37 @@ pipeline {
                     node_modules/.bin/node-jq -r '.deply_url' deploy-output.json
                 '''
             }
+            script {
+                env.STAGING_URL = sh(script: "node_modules/.bin/node-jq -r '.deply_url' deploy-output.json", returnStdout: true)
+            }
         } //
 
         
+               stage('staging E2E') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.49.1-noble'
+                    reuseNode true
+                }
+            }
+
+                
+            environment {
+                CI_ENVIRONMENT_URL = 'https://incandescent-cucurucho-8b9065.netlify.app'
+            }          
+
+            steps {
+                sh '''
+                    npx playwright test --reporter=html || true
+                '''
+            }
+            post {
+                always {
+                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Staging E2E', reportTitles: '', useWrapperFileDirectly: true])
+                }
+            }
+        }
+
         stage('Approval') {
             steps {
                 script {
@@ -137,7 +165,7 @@ pipeline {
 
                 
             environment {
-                CI_ENVIRONMENT_URL = 'https://incandescent-cucurucho-8b9065.netlify.app'
+                CI_ENVIRONMENT_URL = = "${env.STAGING_URL}"
             }          
 
             steps {
@@ -147,7 +175,7 @@ pipeline {
             }
             post {
                 always {
-                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright E2E', reportTitles: '', useWrapperFileDirectly: true])
+                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Prod E2E', reportTitles: '', useWrapperFileDirectly: true])
                 }
             }
         }
