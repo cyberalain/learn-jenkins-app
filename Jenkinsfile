@@ -92,7 +92,7 @@ pipeline {
                     node_modules/.bin/node-jq -r '.deply_url' deploy-output.json
                 '''
                  script {
-                env.STAGING_URL = sh(script: "node_modules/.bin/node-jq -r '.deply_url' deploy-output.json", returnStdout: true)
+                env.STAGING_URL = sh(script: "node_modules/.bin/node-jq -r '.deply_url' deploy-output.json", returnStdout: true).trim()
             }
             }
         } //
@@ -165,7 +165,7 @@ pipeline {
 
                 
             environment {
-                CI_ENVIRONMENT_URL = = "${env.STAGING_URL}"
+                CI_ENVIRONMENT_URL = "${env.STAGING_URL}"
             }          
 
             steps {
