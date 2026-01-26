@@ -12,7 +12,7 @@ pipeline {
         stage('Build') {
             agent {
                 docker {
-                    image 'node:18-alpine'
+                    image 'mcr.microsoft.com/playwright:v1.49.1-noble'
                     reuseNode true
                 }
             }
@@ -32,7 +32,7 @@ pipeline {
                 stage('Unit tests') {
                     agent {
                         docker {
-                            image 'node:18-alpine'
+                            image 'mcr.microsoft.com/playwright:v1.49.1-noble'
                             reuseNode true
                         }
                     }
@@ -134,7 +134,7 @@ pipeline {
         stage('Deploy prod') {
             agent {
                 docker {
-                    image 'node:18-alpine'
+                    image 'mcr.microsoft.com/playwright:v1.49.1-noble'
                     reuseNode true
                 }
             }
