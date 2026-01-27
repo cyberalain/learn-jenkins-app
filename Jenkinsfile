@@ -76,6 +76,7 @@ pipeline {
             }
         }
 
+
         stage('Deploy staging') {
             agent {
                 docker {
@@ -83,6 +84,7 @@ pipeline {
                     reuseNode true
                 }
             }
+
             steps {
                 sh '''
                     npm install netlify-cli node-jq
@@ -90,27 +92,8 @@ pipeline {
                     echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
                     node_modules/.bin/netlify status
                     node_modules/.bin/netlify deploy --dir=build --json > deploy-output.json
-                '''
-                script {
-                env.STAGING_URL = sh(script: "node_modules/.bin/node-jq -r '.deply_url' deploy-output.json", returnStdout: true).trim()
-                }
-            }
-        }
-
-        stage('Staging E2E') {
-            agent {
-                docker {
-                    image 'mcr.microsoft.com/playwright:v1.49.1-noble'
-                    reuseNode true
-                }
-            }
-
-            environment {
-                 CI_ENVIRONMENT_URL = 'https://incandescent-cucurucho-8b9065.netlify.app'
-            }
-
-            steps {
-                sh '''
+                    CI_ENVIRONMENT_URL=$(node_modules/.bin/netlify deploy --dir=build --json > deploy-output.json)
+                    node_modules/.bin/node-jq -r '.deply_url' deploy-output.json
                     npx playwright test --reporter=html || true
                 '''
             }
