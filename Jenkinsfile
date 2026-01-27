@@ -7,7 +7,6 @@ pipeline {
     }
 
     stages {
-
         stage('Build') {
             agent {
                 docker {
@@ -39,7 +38,6 @@ pipeline {
 
                     steps {
                         sh '''
-                            #test -f build/index.html
                             npm test
                         '''
                     }
@@ -50,7 +48,7 @@ pipeline {
                     }
                 }
 
-                stage('E2E') {
+                stage('E2E - Local') {
                     agent {
                         docker {
                             image 'mcr.microsoft.com/playwright:v1.49.1-noble'
@@ -61,9 +59,16 @@ pipeline {
                     steps {
                         sh '''
                             npm install serve
-                            node_modules/.bin/serve -s build &
+                            # Start the local server
+                            node_modules/.bin/serve -s build -l 3000 &
+                            SERVER_PID=\$!
                             sleep 10
-                            npx playwright test  --reporter=html
+                            
+                            # Run tests with local URL
+                            CI_ENVIRONMENT_URL=http://localhost:3000 npx playwright test --reporter=html
+                            
+                            # Kill the server after tests
+                            kill \$SERVER_PID
                         '''
                     }
 
@@ -84,19 +89,32 @@ pipeline {
                 }
             }
 
-            environment {
-                 CI_ENVIRONMENT_URL = 'STAGING_URL_TO_BESET'
-            }
-
             steps {
                 sh '''
-                    npm install netlify-cli node-jq
+                    npm install netlify-cli
                     node_modules/.bin/netlify --version
-                    echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
+                    echo "Deploying to staging. Site ID: \$NETLIFY_SITE_ID"
                     node_modules/.bin/netlify status
-                    node_modules/.bin/netlify deploy --dir=build --json > deploy-output.json
-                    CI_ENVIRONMENT_URL=$(node_modules/.bin/netlify deploy --dir=build --json > deploy-output.json)
-                    node_modules/.bin/node-jq -r '.deply_url' deploy-output.json
+                    
+                    # Deploy to staging and capture the URL
+                    DEPLOY_OUTPUT=\$(node_modules/.bin/netlify deploy --dir=build --json)
+                    echo "\$DEPLOY_OUTPUT" > deploy-output.json
+                    
+                    # Parse the JSON to get the deploy URL
+                    DEPLOY_URL=\$(echo "\$DEPLOY_OUTPUT" | grep -o '"deploy_url":"[^"]*"' | cut -d'"' -f4)
+                    
+                    if [ -z "\$DEPLOY_URL" ]; then
+                        echo "ERROR: Failed to get deploy URL from Netlify"
+                        cat deploy-output.json
+                        exit 1
+                    fi
+                    
+                    echo "Staging URL: \$DEPLOY_URL"
+                    
+                    # Set CI_ENVIRONMENT_URL for Playwright tests
+                    export CI_ENVIRONMENT_URL=\$DEPLOY_URL
+                    
+                    # Run tests against the staging URL
                     npx playwright test --reporter=html || true
                 '''
             }
@@ -124,19 +142,26 @@ pipeline {
                 }
             }
 
-            environment {
-                CI_ENVIRONMENT_URL = 'YOUR NETLIFY URL'
-            }
-
             steps {
                 sh '''
-                node --version
-                npm install netlify-cli
-                node_modules/.bin/netlify --version
-                echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
-                node_modules/.bin/netlify status
-                node_modules/.bin/netlify deploy --dir=build --prod
-                npx playwright test  --reporter=html
+                    node --version
+                    npm install netlify-cli
+                    node_modules/.bin/netlify --version
+                    echo "Deploying to production. Site ID: \$NETLIFY_SITE_ID"
+                    node_modules/.bin/netlify status
+                    node_modules/.bin/netlify deploy --dir=build --prod
+                    
+                    # Get the production URL (Netlify uses the site name by default)
+                    # Replace with your actual production URL
+                    PROD_URL="https://incandescent-cucurucho-8b9065.netlify.app"
+                    
+                    echo "Production URL: \$PROD_URL"
+                    
+                    # Set CI_ENVIRONMENT_URL for Playwright tests
+                    export CI_ENVIRONMENT_URL=\$PROD_URL
+                    
+                    # Run tests against production
+                    npx playwright test --reporter=html
                 '''
             }
 
