@@ -76,13 +76,16 @@ pipeline {
             }
         }
 
-
         stage('Deploy staging') {
             agent {
                 docker {
                     image 'mcr.microsoft.com/playwright:v1.49.1-noble'
                     reuseNode true
                 }
+            }
+
+            environment {
+                 CI_ENVIRONMENT_URL = 'STAGING_URL_TO_BESET'
             }
 
             steps {
