@@ -14,9 +14,6 @@ pipeline {
                 sh 'docker build -t my-playwright .'
             }
         }
-
-        stage('Build') {
-            agent {
                 docker {
                     image 'mcr.microsoft.com/playwright:v1.49.1-noble'
                     reuseNode true
