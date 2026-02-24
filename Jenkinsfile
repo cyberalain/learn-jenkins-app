@@ -22,13 +22,19 @@ pipeline {
         }
       }
       steps {
-          withCredentials([usernamePassword(credentialsId: 'my-aws ', passwordVariable: 'AWS_SECRET_ACCESS_KEY', usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
-           sh '''
-              aws --version
-              awl s3 ls
-            '''
-          // some block
-          }
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'my-aws',              // ✅ removed trailing space
+            usernameVariable: 'AWS_ACCESS_KEY_ID',
+            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+          )
+        ]) {
+          sh '''
+            set -eu
+            aws --version
+            aws s3 ls
+          '''
+        }
       }
     }
 
@@ -64,7 +70,6 @@ pipeline {
           steps {
             sh '''
               set -eu
-              # CRA tests must exit in CI
               CI=true npm test
             '''
           }
@@ -86,11 +91,9 @@ pipeline {
             sh '''
               set -eu
 
-              # Start the app (use npx so "serve" doesn't need global install)
               npx --yes serve -s build -l 3000 >/tmp/serve.log 2>&1 &
               SERVER_PID=$!
 
-              # Wait until the server is ready
               node -e "
                 const http=require('http');
                 const start=Date.now();
@@ -103,10 +106,8 @@ pipeline {
                 })();
               " || (echo 'Server did not start' && cat /tmp/serve.log && kill $SERVER_PID || true && exit 1)
 
-              # Run Playwright
               npx playwright test --reporter=html
 
-              # Stop server
               kill $SERVER_PID || true
             '''
           }
@@ -143,11 +144,9 @@ pipeline {
           echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
-          # Deploy and capture deploy_url WITHOUT jq
-          CI_ENVIRONMENT_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
-          echo "Staging deploy URL: $CI_ENVIRONMENT_URL"
+          export BASE_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
+          echo "Staging URL: $BASE_URL"
 
-          # Optional: run E2E after staging deploy (won't fail pipeline)
           npx playwright test --reporter=html || true
         '''
       }
@@ -183,7 +182,10 @@ pipeline {
 
           netlify deploy --dir=build --prod
 
-          # Optional: E2E after prod deploy (won't fail pipeline)
+          # Set to your production URL (from netlify status / project URL)
+          export BASE_URL="https://incandescent-cucurucho-8b9065.netlify.app"
+          echo "Prod URL: $BASE_URL"
+
           npx playwright test --reporter=html || true
         '''
       }
