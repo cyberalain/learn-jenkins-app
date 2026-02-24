@@ -5,6 +5,17 @@ pipeline {
     NETLIFY_SITE_ID     = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
     NETLIFY_AUTH_TOKEN  = credentials('netlify-token')
     REACT_APP_VERSION   = "1.0.${BUILD_ID}"
+
+    // npm stability settings
+    NPM_CONFIG_REGISTRY = 'https://registry.npmjs.org/'
+    NPM_CONFIG_FETCH_RETRIES = '5'
+    NPM_CONFIG_FETCH_RETRY_FACTOR = '2'
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT = '20000'
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT = '120000'
+  }
+
+  options {
+    timestamps()
   }
 
   stages {
@@ -18,9 +29,7 @@ pipeline {
         }
       }
       steps {
-        sh '''
-          aws --version
-        '''
+        sh 'aws --version'
       }
     }
 
@@ -33,13 +42,30 @@ pipeline {
       }
       steps {
         sh '''
-          set -e
-          ls -la
+          set -euxo pipefail
+
           node --version
           npm --version
-          npm ci
+
+          # quick network sanity checks (won't fail build if blocked, just prints)
+          echo "DNS test:"
+          cat /etc/resolv.conf || true
+          echo "Try reaching npm registry:"
+          wget -qSO- https://registry.npmjs.org/ >/dev/null || true
+
+          npm config set registry "$NPM_CONFIG_REGISTRY"
+
+          # Retry npm ci (handles flaky networks)
+          i=1
+          until [ $i -gt 3 ]; do
+            echo "npm ci attempt $i/3..."
+            npm ci && break
+            i=$((i+1))
+            echo "npm ci failed. Waiting before retry..."
+            sleep 15
+          done
+
           npm run build
-          ls -la
         '''
       }
     }
@@ -56,7 +82,7 @@ pipeline {
           }
           steps {
             sh '''
-              set -e
+              set -euxo pipefail
               npm test
             '''
           }
@@ -76,7 +102,7 @@ pipeline {
           }
           steps {
             sh '''
-              set -e
+              set -euxo pipefail
               serve -s build &
               sleep 10
               npx playwright test --reporter=html
@@ -108,23 +134,19 @@ pipeline {
           reuseNode true
         }
       }
-
       steps {
         sh '''
-          set -e
+          set -euxo pipefail
           netlify --version
           echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
-          # Deploy and capture deploy_url WITHOUT jq (using Node to parse JSON)
           CI_ENVIRONMENT_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
           echo "Staging deploy URL: $CI_ENVIRONMENT_URL"
 
-          # Run E2E against staging (do not fail pipeline if tests fail)
           npx playwright test --reporter=html || true
         '''
       }
-
       post {
         always {
           publishHTML([
@@ -148,21 +170,17 @@ pipeline {
           reuseNode true
         }
       }
-
       steps {
         sh '''
-          set -e
-          node --version
+          set -euxo pipefail
           netlify --version
           echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
           netlify deploy --dir=build --prod
-
           npx playwright test --reporter=html || true
         '''
       }
-
       post {
         always {
           publishHTML([
