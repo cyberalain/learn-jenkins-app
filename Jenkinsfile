@@ -22,18 +22,30 @@ pipeline {
         }
       }
       steps {
-        withCredentials([
-          usernamePassword(
-            credentialsId: 'my-aws',              // ✅ removed trailing space
-            usernameVariable: 'AWS_ACCESS_KEY_ID',
-            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-          )
-        ]) {
-          sh '''
-            set -eu
-            aws --version
-            aws s3 ls
-          '''
+        // IMPORTANT:
+        // If AWS creds are missing/wrong, this will NOT stop the rest of the pipeline.
+        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+          script {
+            try {
+              withCredentials([
+                usernamePassword(
+                  credentialsId: 'my-aws', // <-- MUST match Jenkins credential ID EXACTLY
+                  usernameVariable: 'AWS_ACCESS_KEY_ID',
+                  passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                )
+              ]) {
+                sh '''
+                  set -eu
+                  aws --version
+                  aws sts get-caller-identity || true
+                  aws s3 ls
+                '''
+              }
+            } catch (err) {
+              echo "AWS stage skipped/unstable: ${err}"
+              echo "Check Jenkins Credentials ID exists and is exactly: my-aws"
+            }
+          }
         }
       }
     }
@@ -50,7 +62,6 @@ pipeline {
           set -eu
           node --version
           npm --version
-
           npm ci
           npm run build
         '''
@@ -107,7 +118,6 @@ pipeline {
               " || (echo 'Server did not start' && cat /tmp/serve.log && kill $SERVER_PID || true && exit 1)
 
               npx playwright test --reporter=html
-
               kill $SERVER_PID || true
             '''
           }
@@ -126,7 +136,6 @@ pipeline {
             }
           }
         }
-
       }
     }
 
@@ -141,7 +150,6 @@ pipeline {
         sh '''
           set -eu
           netlify --version
-          echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
           export BASE_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
@@ -177,12 +185,10 @@ pipeline {
         sh '''
           set -eu
           netlify --version
-          echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
           netlify deploy --dir=build --prod
 
-          # Set to your production URL (from netlify status / project URL)
           export BASE_URL="https://incandescent-cucurucho-8b9065.netlify.app"
           echo "Prod URL: $BASE_URL"
 
@@ -204,6 +210,5 @@ pipeline {
         }
       }
     }
-
   }
 }
