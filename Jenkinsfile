@@ -2,16 +2,9 @@ pipeline {
   agent any
 
   environment {
-    NETLIFY_SITE_ID     = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
-    NETLIFY_AUTH_TOKEN  = credentials('netlify-token')
-    REACT_APP_VERSION   = "1.0.${BUILD_ID}"
-
-    // npm stability settings
-    NPM_CONFIG_REGISTRY = 'https://registry.npmjs.org/'
-    NPM_CONFIG_FETCH_RETRIES = '5'
-    NPM_CONFIG_FETCH_RETRY_FACTOR = '2'
-    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT = '20000'
-    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT = '120000'
+    NETLIFY_SITE_ID    = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
+    NETLIFY_AUTH_TOKEN = credentials('netlify-token')
+    REACT_APP_VERSION  = "1.0.${BUILD_ID}"
   }
 
   options {
@@ -29,42 +22,26 @@ pipeline {
         }
       }
       steps {
-        sh 'aws --version'
+        sh '''
+          aws --version
+        '''
       }
     }
 
     stage('Build') {
       agent {
         docker {
-          image 'node:18-alpine'
+          image 'my-playwright'
           reuseNode true
         }
       }
       steps {
         sh '''
-          set -euxo pipefail
-
+          set -eu
           node --version
           npm --version
 
-          # quick network sanity checks (won't fail build if blocked, just prints)
-          echo "DNS test:"
-          cat /etc/resolv.conf || true
-          echo "Try reaching npm registry:"
-          wget -qSO- https://registry.npmjs.org/ >/dev/null || true
-
-          npm config set registry "$NPM_CONFIG_REGISTRY"
-
-          # Retry npm ci (handles flaky networks)
-          i=1
-          until [ $i -gt 3 ]; do
-            echo "npm ci attempt $i/3..."
-            npm ci && break
-            i=$((i+1))
-            echo "npm ci failed. Waiting before retry..."
-            sleep 15
-          done
-
+          npm ci
           npm run build
         '''
       }
@@ -76,14 +53,15 @@ pipeline {
         stage('Unit tests') {
           agent {
             docker {
-              image 'node:18-alpine'
+              image 'my-playwright'
               reuseNode true
             }
           }
           steps {
             sh '''
-              set -euxo pipefail
-              npm test
+              set -eu
+              # CRA tests must exit in CI
+              CI=true npm test
             '''
           }
           post {
@@ -102,10 +80,30 @@ pipeline {
           }
           steps {
             sh '''
-              set -euxo pipefail
-              serve -s build &
-              sleep 10
+              set -eu
+
+              # Start the app (use npx so "serve" doesn't need global install)
+              npx --yes serve -s build -l 3000 >/tmp/serve.log 2>&1 &
+              SERVER_PID=$!
+
+              # Wait until the server is ready
+              node -e "
+                const http=require('http');
+                const start=Date.now();
+                (function ping(){
+                  http.get('http://127.0.0.1:3000', r => process.exit(r.statusCode===200?0:1))
+                    .on('error', () => {
+                      if (Date.now()-start > 60000) process.exit(1);
+                      setTimeout(ping, 1000);
+                    });
+                })();
+              " || (echo 'Server did not start' && cat /tmp/serve.log && kill $SERVER_PID || true && exit 1)
+
+              # Run Playwright
               npx playwright test --reporter=html
+
+              # Stop server
+              kill $SERVER_PID || true
             '''
           }
           post {
@@ -136,21 +134,23 @@ pipeline {
       }
       steps {
         sh '''
-          set -euxo pipefail
+          set -eu
           netlify --version
           echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
+          # Deploy and capture deploy_url WITHOUT jq
           CI_ENVIRONMENT_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
           echo "Staging deploy URL: $CI_ENVIRONMENT_URL"
 
+          # Optional: run E2E after staging deploy (won't fail pipeline)
           npx playwright test --reporter=html || true
         '''
       }
       post {
         always {
           publishHTML([
-            allowMissing: false,
+            allowMissing: true,
             alwaysLinkToLastBuild: false,
             keepAll: false,
             reportDir: 'playwright-report',
@@ -172,19 +172,21 @@ pipeline {
       }
       steps {
         sh '''
-          set -euxo pipefail
+          set -eu
           netlify --version
           echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
           netlify deploy --dir=build --prod
+
+          # Optional: E2E after prod deploy (won't fail pipeline)
           npx playwright test --reporter=html || true
         '''
       }
       post {
         always {
           publishHTML([
-            allowMissing: false,
+            allowMissing: true,
             alwaysLinkToLastBuild: false,
             keepAll: false,
             reportDir: 'playwright-report',
