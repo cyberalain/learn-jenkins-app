@@ -5,13 +5,15 @@ pipeline {
     NETLIFY_SITE_ID    = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
     NETLIFY_AUTH_TOKEN = credentials('netlify-token')
     REACT_APP_VERSION  = "1.0.${BUILD_ID}"
-    AWS_S3_BUCKET      = 'learn-jenkins-20260224'   // <-- PUT YOUR BUCKET NAME HERE
-    AWS_DEFAULT_REGION = 'us-east-1'                // <-- change if your bucket is in another region
+
+    // ✅ MUST be your real bucket name
+    AWS_S3_BUCKET      = 'learn-jenkins-20260224'
+
+    // ✅ Set your bucket region (N. Virginia is usually us-east-1)
+    AWS_DEFAULT_REGION = 'us-east-1'
   }
 
-  options {
-    timestamps()
-  }
+  options { timestamps() }
 
   stages {
 
@@ -23,30 +25,32 @@ pipeline {
           reuseNode true
         }
       }
-
       steps {
-        withCredentials([
-          usernamePassword(
-            credentialsId: 'my-aws',                 // <-- MUST be EXACTLY this ID in Jenkins
-            usernameVariable: 'AWS_ACCESS_KEY_ID',
-            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-          )
-        ]) {
+        withCredentials([usernamePassword(
+          credentialsId: 'my-aws',              // ✅ EXACTLY this ID
+          usernameVariable: 'AWS_ACCESS_KEY_ID',
+          passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+        )]) {
           sh '''
-            set -eu
+            set -euo pipefail
+
+            echo "== AWS CLI =="
             aws --version
 
-            echo "Checking AWS identity..."
+            echo "== Who am I? =="
             aws sts get-caller-identity
 
-            echo "Writing file..."
-            echo "Hello from Jenkins build ${BUILD_ID} at $(date -u)" > index.html
+            echo "== Buckets visible to this user =="
+            aws s3 ls
 
-            echo "Uploading to s3://${AWS_S3_BUCKET}/index.html ..."
+            echo "== Uploading file to S3 bucket: ${AWS_S3_BUCKET} =="
+            echo "Hello from Jenkins build ${BUILD_ID} at $(date -u) !" > index.html
+
+            # Upload to the root of the bucket:
             aws s3 cp index.html "s3://${AWS_S3_BUCKET}/index.html"
 
-            echo "Listing bucket (should show index.html)..."
-            aws s3 ls "s3://${AWS_S3_BUCKET}/" || true
+            echo "== Confirm the object exists =="
+            aws s3 ls "s3://${AWS_S3_BUCKET}/"
           '''
         }
       }
@@ -120,14 +124,13 @@ pipeline {
               " || (echo 'Server did not start' && cat /tmp/serve.log && kill $SERVER_PID || true && exit 1)
 
               npx playwright test --reporter=html
-
               kill $SERVER_PID || true
             '''
           }
           post {
             always {
               publishHTML([
-                allowMissing: false,
+                allowMissing: true,
                 alwaysLinkToLastBuild: false,
                 keepAll: false,
                 reportDir: 'playwright-report',
@@ -139,6 +142,7 @@ pipeline {
             }
           }
         }
+
       }
     }
 
@@ -213,5 +217,6 @@ pipeline {
         }
       }
     }
+
   }
 }
