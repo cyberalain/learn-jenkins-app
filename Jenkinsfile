@@ -5,7 +5,6 @@ pipeline {
     NETLIFY_SITE_ID    = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
     NETLIFY_AUTH_TOKEN = credentials('netlify-token')
     REACT_APP_VERSION  = "1.0.${BUILD_ID}"
-
     AWS_S3_BUCKET      = 'learn-jenkins-20260224'
     AWS_DEFAULT_REGION = 'us-east-1'
   }
@@ -23,33 +22,30 @@ pipeline {
         }
       }
       steps {
-        withCredentials([usernamePassword(
-          credentialsId: 'my-aws',
-          usernameVariable: 'AWS_ACCESS_KEY_ID',
-          passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-        )]) {
-          sh '''#!/bin/sh
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'my-aws',
+            usernameVariable: 'AWS_ACCESS_KEY_ID',
+            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+          )
+        ]) {
+          sh '''
             set -eu
-
-            echo "== AWS CLI =="
             aws --version
 
-            echo "== Region =="
-            echo "$AWS_DEFAULT_REGION"
-
-            echo "== Who am I? =="
+            echo "Checking AWS identity..."
             aws sts get-caller-identity
 
-            echo "== Check bucket exists (this will fail if bucket/region is wrong) =="
-            aws s3api head-bucket --bucket "$AWS_S3_BUCKET"
+            echo "Checking bucket exists: $AWS_S3_BUCKET"
+            aws s3 ls "s3://$AWS_S3_BUCKET" >/dev/null
 
-            echo "Hello from Jenkins build ${BUILD_ID} at $(date -u)" > index.html
+            echo "Hello S3 from Jenkins build $BUILD_ID" > index.html
 
-            echo "== Uploading to S3 =="
-            aws s3 cp index.html "s3://${AWS_S3_BUCKET}/index.html"
+            echo "Uploading index.html to S3..."
+            aws s3 cp index.html "s3://$AWS_S3_BUCKET/index.html"
 
-            echo "== Confirm object is there =="
-            aws s3 ls "s3://${AWS_S3_BUCKET}/"
+            echo "Done. Listing objects:"
+            aws s3 ls "s3://$AWS_S3_BUCKET/"
           '''
         }
       }
@@ -90,9 +86,7 @@ pipeline {
             '''
           }
           post {
-            always {
-              junit 'jest-results/junit.xml'
-            }
+            always { junit 'jest-results/junit.xml' }
           }
         }
 
@@ -129,7 +123,7 @@ pipeline {
           post {
             always {
               publishHTML([
-                allowMissing: true,
+                allowMissing: false,
                 alwaysLinkToLastBuild: false,
                 keepAll: false,
                 reportDir: 'playwright-report',
@@ -141,6 +135,7 @@ pipeline {
             }
           }
         }
+
       }
     }
 
@@ -157,7 +152,7 @@ pipeline {
           netlify --version
           netlify status
 
-          export BASE_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
+          BASE_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
           echo "Staging URL: $BASE_URL"
 
           npx playwright test --reporter=html || true
@@ -191,6 +186,7 @@ pipeline {
           set -eu
           netlify --version
           netlify status
+
           netlify deploy --dir=build --prod
 
           export BASE_URL="https://incandescent-cucurucho-8b9065.netlify.app"
