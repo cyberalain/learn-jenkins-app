@@ -11,7 +11,26 @@ pipeline {
 
   options { timestamps() }
 
-  stages {
+  
+    stage('Build') {
+      agent {
+        docker {
+          image 'my-playwright'
+          reuseNode true
+        }
+      }
+      steps {
+        sh '''
+          set -eu
+          node --version
+          npm --version
+          npm ci
+          npm run build
+        '''
+      }
+    }
+
+    stages {
 
     stage('AWS Upload to S3') {
       agent {
@@ -33,16 +52,14 @@ pipeline {
             set -eu
             aws --version
 
-            echo "Checking AWS identity..."
+            'echo "Checking AWS identity..."
             aws sts get-caller-identity
 
             echo "Checking bucket exists: $AWS_S3_BUCKET"
             aws s3 ls "s3://$AWS_S3_BUCKET" >/dev/null
 
-            echo "Hello S3! from Jenkins Welcome build $BUILD_ID" > index.html
-
-            echo "Uploading index.html to S3..."
             aws s3 cp index.html "s3://$AWS_S3_BUCKET/index.html"
+            aws s3 sync build s3://$AWS_S3_BUCKET
 
             echo "Done. Listing objects:"
             aws s3 ls "s3://$AWS_S3_BUCKET/"
@@ -51,23 +68,6 @@ pipeline {
       }
     }
 
-    stage('Build') {
-      agent {
-        docker {
-          image 'my-playwright'
-          reuseNode true
-        }
-      }
-      steps {
-        sh '''
-          set -eu
-          node --version
-          npm --version
-          npm ci
-          npm run build
-        '''
-      }
-    }
 
     stage('Tests') {
       parallel {
