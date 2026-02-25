@@ -21,33 +21,29 @@ pipeline {
           reuseNode true
         }
       }
+      environment {
+        AWS_DEFAULT_REGION = 'us-east-1'
+      }
       steps {
-        // IMPORTANT:
-        // If AWS creds are missing/wrong, this will NOT stop the rest of the pipeline.
-        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-          script {
-            try {
-              withCredentials([
-                usernamePassword(
-                  credentialsId: 'my-aws', // <-- MUST match Jenkins credential ID EXACTLY
-                  usernameVariable: 'AWS_ACCESS_KEY_ID',
-                  passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                )
-              ]) {
-                sh '''
-                  set -eu
-                  aws --version
-                  aws sts get-caller-identity || true
-                  aws s3 ls
-                  echo "Hello S3!" > index.html
-                  aws s3 cp index.html s3://learn-jenkins-20260224/index.html
-                '''
-              }
-            } catch (err) {
-              echo "AWS stage skipped/unstable: ${err}"
-              echo "Check Jenkins Credentials ID exists and is exactly: my-aws"
-            }
-          }
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'my-aws',                // ✅ make sure this ID exists in Jenkins (NO spaces)
+            usernameVariable: 'AWS_ACCESS_KEY_ID',
+            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+          )
+        ]) {
+          sh '''
+            set -eux
+
+            aws --version
+            aws sts get-caller-identity
+
+            echo "Hello S3 from Jenkins! Build=${BUILD_ID}" > index.html
+
+            aws s3 cp index.html s3://learn-jenkins-20260224/index.html
+
+            aws s3 ls s3://learn-jenkins-20260224/
+          '''
         }
       }
     }
@@ -212,5 +208,6 @@ pipeline {
         }
       }
     }
+
   }
 }
