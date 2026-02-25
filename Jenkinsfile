@@ -2,34 +2,33 @@ pipeline {
   agent any
 
   environment {
-    NETLIFY_SITE_ID     = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
-    NETLIFY_AUTH_TOKEN  = credentials('netlify-token')
-    REACT_APP_VERSION   = "1.0.${BUILD_ID}"
+    NETLIFY_SITE_ID    = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
+    NETLIFY_AUTH_TOKEN = credentials('netlify-token')
+    REACT_APP_VERSION  = "1.0.${BUILD_ID}"
   }
 
-  options {
-    timestamps()
-  }
+  options { timestamps() }
 
   stages {
 
-    stage('AWS') {
+    stage('AWS Upload to S3') {
       agent {
         docker {
           image 'amazon/aws-cli'
           args "--entrypoint=''"
-          reuseNode true
         }
       }
+
       environment {
         AWS_DEFAULT_REGION = 'us-east-1'
         AWS_REGION         = 'us-east-1'
         AWS_S3_BUCKET      = 'learn-jenkins-20260224'
       }
+
       steps {
         withCredentials([
           usernamePassword(
-            credentialsId: 'my-aws',
+            credentialsId: 'my-aws',               // ✅ EXACT ID (NO SPACE)
             usernameVariable: 'AWS_ACCESS_KEY_ID',
             passwordVariable: 'AWS_SECRET_ACCESS_KEY'
           )
@@ -39,25 +38,15 @@ pipeline {
 
             aws --version
 
-            echo "=== DEBUG: which credentials are loaded (masked) ==="
-            aws configure list
-
-            echo "=== MUST work: confirms Jenkins is really authenticated ==="
+            # Validate creds (optional but useful)
             aws sts get-caller-identity
 
-            echo "=== Confirm bucket exists and is reachable ==="
-            aws s3api head-bucket --bucket "$AWS_S3_BUCKET"
+            # Create a file and upload it
+            echo "Hello S3 from Jenkins build ${BUILD_NUMBER}" > index.html
+            aws s3 cp index.html "s3://$AWS_S3_BUCKET/index.html"
 
-            echo "Hello S3 from Jenkins! Build=${BUILD_ID}" > index.html
-
-            echo "=== Uploading to S3 ==="
-            aws s3 cp index.html "s3://$AWS_S3_BUCKET/index.html" --region "$AWS_REGION"
-
-            echo "=== Listing bucket contents ==="
+            # Confirm it exists in the bucket
             aws s3 ls "s3://$AWS_S3_BUCKET/"
-
-            echo "=== Confirm object exists ==="
-            aws s3api head-object --bucket "$AWS_S3_BUCKET" --key "index.html"
           '''
         }
       }
@@ -118,6 +107,7 @@ pipeline {
               npx --yes serve -s build -l 3000 >/tmp/serve.log 2>&1 &
               SERVER_PID=$!
 
+              # Wait for server
               node -e "
                 const http=require('http');
                 const start=Date.now();
@@ -130,7 +120,6 @@ pipeline {
                 })();
               " || (echo 'Server did not start' && cat /tmp/serve.log && kill $SERVER_PID || true && exit 1)
 
-              export BASE_URL="http://127.0.0.1:3000"
               npx playwright test --reporter=html
 
               kill $SERVER_PID || true
@@ -139,7 +128,7 @@ pipeline {
           post {
             always {
               publishHTML([
-                allowMissing: true,
+                allowMissing: false,
                 alwaysLinkToLastBuild: false,
                 keepAll: false,
                 reportDir: 'playwright-report',
@@ -151,7 +140,6 @@ pipeline {
             }
           }
         }
-
       }
     }
 
@@ -226,6 +214,5 @@ pipeline {
         }
       }
     }
-
   }
 }
