@@ -2,9 +2,9 @@ pipeline {
   agent any
 
   environment {
-    NETLIFY_SITE_ID    = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
-    NETLIFY_AUTH_TOKEN = credentials('netlify-token')
-    REACT_APP_VERSION  = "1.0.${BUILD_ID}"
+    NETLIFY_SITE_ID     = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
+    NETLIFY_AUTH_TOKEN  = credentials('netlify-token')
+    REACT_APP_VERSION   = "1.0.${BUILD_ID}"
   }
 
   options {
@@ -22,27 +22,30 @@ pipeline {
         }
       }
       environment {
+        AWS_S3_BUCKET      = 'learn-jenkins-20260224'
         AWS_DEFAULT_REGION = 'us-east-1'
       }
       steps {
         withCredentials([
           usernamePassword(
-            credentialsId: 'my-aws',                // ✅ make sure this ID exists in Jenkins (NO spaces)
+            credentialsId: 'my-aws',
             usernameVariable: 'AWS_ACCESS_KEY_ID',
             passwordVariable: 'AWS_SECRET_ACCESS_KEY'
           )
         ]) {
           sh '''
             set -eux
-
             aws --version
+
+            echo "Using AWS identity:"
             aws sts get-caller-identity
 
-            echo "Hello S3 from Jenkins! Build=${BUILD_ID}" > index.html
+            echo "Hello S3! Build=${BUILD_ID}" > index.html
 
-            aws s3 cp index.html s3://learn-jenkins-20260224/index.html
+            aws s3 cp index.html s3://$AWS_S3_BUCKET/index.html
 
-            aws s3 ls s3://learn-jenkins-20260224/
+            echo "Objects in bucket:"
+            aws s3 ls s3://$AWS_S3_BUCKET/
           '''
         }
       }
@@ -115,14 +118,17 @@ pipeline {
                 })();
               " || (echo 'Server did not start' && cat /tmp/serve.log && kill $SERVER_PID || true && exit 1)
 
+              # Local E2E hits localhost
+              export BASE_URL="http://127.0.0.1:3000"
               npx playwright test --reporter=html
+
               kill $SERVER_PID || true
             '''
           }
           post {
             always {
               publishHTML([
-                allowMissing: false,
+                allowMissing: true,
                 alwaysLinkToLastBuild: false,
                 keepAll: false,
                 reportDir: 'playwright-report',
@@ -148,6 +154,7 @@ pipeline {
         sh '''
           set -eu
           netlify --version
+          echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
           export BASE_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
@@ -183,6 +190,7 @@ pipeline {
         sh '''
           set -eu
           netlify --version
+          echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
           netlify deploy --dir=build --prod
@@ -208,6 +216,5 @@ pipeline {
         }
       }
     }
-
   }
 }
