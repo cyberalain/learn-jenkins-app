@@ -32,7 +32,7 @@ pipeline {
       }
     }
 
-    stage('AWS Upload to S3') {
+    stage('AWS') {
       agent {
         docker {
           image 'amazon/aws-cli'
