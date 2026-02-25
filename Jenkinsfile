@@ -6,10 +6,7 @@ pipeline {
     NETLIFY_AUTH_TOKEN = credentials('netlify-token')
     REACT_APP_VERSION  = "1.0.${BUILD_ID}"
 
-    // ✅ MUST be your real bucket name
     AWS_S3_BUCKET      = 'learn-jenkins-20260224'
-
-    // ✅ Set your bucket region (N. Virginia is usually us-east-1)
     AWS_DEFAULT_REGION = 'us-east-1'
   }
 
@@ -27,29 +24,31 @@ pipeline {
       }
       steps {
         withCredentials([usernamePassword(
-          credentialsId: 'my-aws',              // ✅ EXACTLY this ID
+          credentialsId: 'my-aws',
           usernameVariable: 'AWS_ACCESS_KEY_ID',
           passwordVariable: 'AWS_SECRET_ACCESS_KEY'
         )]) {
-          sh '''
-            set -euo pipefail
+          sh '''#!/bin/sh
+            set -eu
 
             echo "== AWS CLI =="
             aws --version
 
+            echo "== Region =="
+            echo "$AWS_DEFAULT_REGION"
+
             echo "== Who am I? =="
             aws sts get-caller-identity
 
-            echo "== Buckets visible to this user =="
-            aws s3 ls
+            echo "== Check bucket exists (this will fail if bucket/region is wrong) =="
+            aws s3api head-bucket --bucket "$AWS_S3_BUCKET"
 
-            echo "== Uploading file to S3 bucket: ${AWS_S3_BUCKET} =="
-            echo "Hello from Jenkins build ${BUILD_ID} at $(date -u) !" > index.html
+            echo "Hello from Jenkins build ${BUILD_ID} at $(date -u)" > index.html
 
-            # Upload to the root of the bucket:
+            echo "== Uploading to S3 =="
             aws s3 cp index.html "s3://${AWS_S3_BUCKET}/index.html"
 
-            echo "== Confirm the object exists =="
+            echo "== Confirm object is there =="
             aws s3 ls "s3://${AWS_S3_BUCKET}/"
           '''
         }
@@ -142,7 +141,6 @@ pipeline {
             }
           }
         }
-
       }
     }
 
@@ -193,7 +191,6 @@ pipeline {
           set -eu
           netlify --version
           netlify status
-
           netlify deploy --dir=build --prod
 
           export BASE_URL="https://incandescent-cucurucho-8b9065.netlify.app"
@@ -217,6 +214,5 @@ pipeline {
         }
       }
     }
-
   }
 }
