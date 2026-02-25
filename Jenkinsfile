@@ -5,9 +5,13 @@ pipeline {
     NETLIFY_SITE_ID    = '3bf421b8-2d38-42b5-b9e8-d197ab62d91c'
     NETLIFY_AUTH_TOKEN = credentials('netlify-token')
     REACT_APP_VERSION  = "1.0.${BUILD_ID}"
+    AWS_S3_BUCKET      = 'learn-jenkins-20260224'   // <-- PUT YOUR BUCKET NAME HERE
+    AWS_DEFAULT_REGION = 'us-east-1'                // <-- change if your bucket is in another region
   }
 
-  options { timestamps() }
+  options {
+    timestamps()
+  }
 
   stages {
 
@@ -16,37 +20,33 @@ pipeline {
         docker {
           image 'amazon/aws-cli'
           args "--entrypoint=''"
+          reuseNode true
         }
-      }
-
-      environment {
-        AWS_DEFAULT_REGION = 'us-east-1'
-        AWS_REGION         = 'us-east-1'
-        AWS_S3_BUCKET      = 'learn-jenkins-20260224'
       }
 
       steps {
         withCredentials([
           usernamePassword(
-            credentialsId: 'my-aws',               // ✅ EXACT ID (NO SPACE)
+            credentialsId: 'my-aws',                 // <-- MUST be EXACTLY this ID in Jenkins
             usernameVariable: 'AWS_ACCESS_KEY_ID',
             passwordVariable: 'AWS_SECRET_ACCESS_KEY'
           )
         ]) {
           sh '''
-            set -eux
-
+            set -eu
             aws --version
 
-            # Validate creds (optional but useful)
+            echo "Checking AWS identity..."
             aws sts get-caller-identity
 
-            # Create a file and upload it
-            echo "Hello S3 from Jenkins build ${BUILD_NUMBER}" > index.html
-            aws s3 cp index.html "s3://$AWS_S3_BUCKET/index.html"
+            echo "Writing file..."
+            echo "Hello from Jenkins build ${BUILD_ID} at $(date -u)" > index.html
 
-            # Confirm it exists in the bucket
-            aws s3 ls "s3://$AWS_S3_BUCKET/"
+            echo "Uploading to s3://${AWS_S3_BUCKET}/index.html ..."
+            aws s3 cp index.html "s3://${AWS_S3_BUCKET}/index.html"
+
+            echo "Listing bucket (should show index.html)..."
+            aws s3 ls "s3://${AWS_S3_BUCKET}/" || true
           '''
         }
       }
@@ -107,7 +107,6 @@ pipeline {
               npx --yes serve -s build -l 3000 >/tmp/serve.log 2>&1 &
               SERVER_PID=$!
 
-              # Wait for server
               node -e "
                 const http=require('http');
                 const start=Date.now();
