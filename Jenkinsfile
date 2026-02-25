@@ -39,7 +39,7 @@ pipeline {
             echo "Checking bucket exists: $AWS_S3_BUCKET"
             aws s3 ls "s3://$AWS_S3_BUCKET" >/dev/null
 
-            echo "Hello S3 from Jenkins build $BUILD_ID" > index.html
+            echo "Hello S3! from Jenkins Welcome build $BUILD_ID" > index.html
 
             echo "Uploading index.html to S3..."
             aws s3 cp index.html "s3://$AWS_S3_BUCKET/index.html"
