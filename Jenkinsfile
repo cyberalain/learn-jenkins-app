@@ -22,8 +22,9 @@ pipeline {
         }
       }
       environment {
-        AWS_S3_BUCKET      = 'learn-jenkins-20260224'
         AWS_DEFAULT_REGION = 'us-east-1'
+        AWS_REGION         = 'us-east-1'
+        AWS_S3_BUCKET      = 'learn-jenkins-20260224'
       }
       steps {
         withCredentials([
@@ -35,17 +36,28 @@ pipeline {
         ]) {
           sh '''
             set -eux
+
             aws --version
 
-            echo "Using AWS identity:"
+            echo "=== DEBUG: which credentials are loaded (masked) ==="
+            aws configure list
+
+            echo "=== MUST work: confirms Jenkins is really authenticated ==="
             aws sts get-caller-identity
 
-            echo "Hello S3! Build=${BUILD_ID}" > index.html
+            echo "=== Confirm bucket exists and is reachable ==="
+            aws s3api head-bucket --bucket "$AWS_S3_BUCKET"
 
-            aws s3 cp index.html s3://$AWS_S3_BUCKET/index.html
+            echo "Hello S3 from Jenkins! Build=${BUILD_ID}" > index.html
 
-            echo "Objects in bucket:"
-            aws s3 ls s3://$AWS_S3_BUCKET/
+            echo "=== Uploading to S3 ==="
+            aws s3 cp index.html "s3://$AWS_S3_BUCKET/index.html" --region "$AWS_REGION"
+
+            echo "=== Listing bucket contents ==="
+            aws s3 ls "s3://$AWS_S3_BUCKET/"
+
+            echo "=== Confirm object exists ==="
+            aws s3api head-object --bucket "$AWS_S3_BUCKET" --key "index.html"
           '''
         }
       }
@@ -118,7 +130,6 @@ pipeline {
                 })();
               " || (echo 'Server did not start' && cat /tmp/serve.log && kill $SERVER_PID || true && exit 1)
 
-              # Local E2E hits localhost
               export BASE_URL="http://127.0.0.1:3000"
               npx playwright test --reporter=html
 
@@ -140,6 +151,7 @@ pipeline {
             }
           }
         }
+
       }
     }
 
@@ -154,7 +166,6 @@ pipeline {
         sh '''
           set -eu
           netlify --version
-          echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
           export BASE_URL=$(netlify deploy --dir=build --json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).deploy_url")
@@ -190,7 +201,6 @@ pipeline {
         sh '''
           set -eu
           netlify --version
-          echo "Deploying to production. Site ID: $NETLIFY_SITE_ID"
           netlify status
 
           netlify deploy --dir=build --prod
@@ -216,5 +226,6 @@ pipeline {
         }
       }
     }
+
   }
 }
